@@ -1,0 +1,291 @@
+<!Doctype html>
+<html lang="zh-CN">
+
+<head>
+    <!-- 原始地址：//webapi.amap.com/ui/1.0/ui/misc/PathSimplifier/examples/simple-demo.html -->
+    <base href="//webapi.amap.com/ui/1.0/ui/misc/PathSimplifier/examples/"/>
+    <meta charset="utf-8">
+    <meta http-equiv="Access-Control-Allow-Origin" content="*">
+    <meta http-equiv="Access-Control-Allow-Origin" content="http://www.1688hot.com">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Content-Type" CONTENT="text/html;charset=utf-8">
+    <meta http-equiv="X-UA-COMPATIBLE" content="IE-edge">
+    <meta http-equiv="X-UA-COMPATIBLE" content="chrome-1">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <link rel="stylesheet" href="http://cache.amap.com/lbs/static/main1119.css"/>
+    <script type="text/javascript" src="http://cache.amap.com/lbs/static/addToolbar.js"></script>
+    <title>轨迹展示</title>
+    <style>
+        html,
+        body,
+        #container {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+    </style>
+</head>
+
+<body>
+<div id="container"></div>
+<div id="tip"></div>
+<div class="button-group">
+    <input type="button" class="button" value="定位" id="addA"/>
+    <input type="button" class="button" value="删除定位" id="delA" />
+</div>
+<script src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+<script type="text/javascript" src="http://webapi.amap.com/maps?v=1.4.1&key=c6ada8f826dbe41efc3af6526ce861a9"></script>
+<script src="http://webapi.amap.com/ui/1.0/main.js?v=1.0.11"></script>
+<script type="text/javascript">
+
+    var adList = new Array();
+    $.ajax({
+        url:'http://115.159.45.74/schoolbus/position?way=getCars',
+        type:'get',
+        dataType:'json',
+        success:function(res){
+            console.log(res);
+            for(var i = 0;i < res.positionlist.length;i++){
+                var position = res.positionlist[i].position.slice(0,res.positionlist[i].position.length);
+                for(var j = 0;j < position.length;j++){
+                    if(position[j] === ','){
+                        var len = j;
+                        var lng = parseFloat(position.slice(0,len));
+                        var lat = parseFloat(position.slice(len+1,position.length));
+                        adList[i] = new Array();
+                        adList[i] = [lng,lat];
+                        //console.log(lng);
+                        //console.log(lat);
+                    }
+                }
+
+                //console.log(position);
+            }
+            console.log(adList);
+        }
+    });
+    //创建地图
+    var map = new AMap.Map('container', {
+        resizeEnable: true,
+        zoom: 4
+    });
+
+
+    AMapUI.load(['ui/misc/PathSimplifier', 'lib/$'], function (PathSimplifier, $) {
+
+        if (!PathSimplifier.supportCanvas) {
+            alert('当前环境不支持 Canvas！');
+            return;
+        }
+        var pathSimplifierIns = new PathSimplifier({
+            zIndex: 100,
+            //autoSetFitView:false,
+            map: map, //所属的地图实例
+
+            getPath: function (pathData, pathIndex) {
+
+                return pathData.path;
+            },
+            getHoverTitle: function (pathData, pathIndex, pointIndex) {
+
+                if (pointIndex >= 0) {
+                    //point
+                    return pathData.name + '，点：' + pointIndex + '/' + pathData.path.length;
+                }
+
+                return pathData.name + '，点数量' + pathData.path.length;
+            },
+            renderOptions: {
+                pathLineStyle:{
+                    strokeStyle:'rgba(255.0,255,255)',
+                    lineWidth:1
+                },
+                pathNavigatorStyle:{
+                    pathLinePassedStyle:'rgba(0,0,0,1)'
+                }
+
+                //renderAllPointsIfNumberBelow: 100 //绘制路线节点，如不需要可设置为-1
+            }
+
+        });
+        /*var mouseTool = new AMap.MouseTool(map);*/
+
+
+        AMap.event.addDomListener(document.getElementById('addA'), 'click', function() {
+            map.plugin('AMap.Geolocation', function () {
+
+                geolocation = new AMap.Geolocation({
+                    enableHighAccuracy: true,
+                    noIpLocate: 0,
+                    noGeoLocation: 0,
+                    timeout: 10000,
+                    maximumAge: 0,
+                    convert: true,
+                    showButton: false,
+                    buttonPosition: 'LB',
+                    buttonOffset: new AMap.Pixel(10, 20),
+                    showMarker: false,
+                    showCircle: false,
+                    panToLocation: false,
+                    zoomToAccuracy: false,
+                    extensions: 'base'
+                });
+                map.addControl(geolocation);
+                geolocation.getCurrentPosition();
+                AMap.event.addListener(geolocation, 'complete', onComplete);//返回定位信息
+                AMap.event.addListener(geolocation, 'error', onError);      //返回定位出错信息
+            });
+            function onComplete(data) {
+                console.log(data);
+                //clearInterval(timer);
+                $.ajax({
+                    type:'POST',
+                    url:'http://115.159.45.74/schoolbus/position?way=postPosition',
+                    dataType:'json',
+                    data:JSON.stringify({
+                        formattedAddress: data.formattedAddress,
+                        accuracy: data.accuracy,
+                        isConverted: data.isConverted,
+                        userid: 'Ptest4',
+                        position: data.position
+                    }),
+                    success:function(res){
+                        console.log(res);
+                        if(res.code==="0"&&res.msg==="ok"){
+                            document.getElementById("tip").innerHTML = "定位成功";
+                        }
+
+                        //alert("haha");
+
+                    }
+
+                });
+
+            }
+            function onError(data) {
+                console.log(data);
+                var str = "定位失败";
+                str += '错误信息';
+                switch (data.info) {
+                    case 'PERMISSION_DENIED':
+                        str += '浏览器阻止了定位操作';
+                        break;
+                    case 'POSITION_UNAVAILBLE':
+                        str += '无法获得当前位置';
+                        break;
+                    case 'TIMEOUT':
+                        str += '定位超时';
+                        break;
+                    default:
+                        str += '未知错误';
+                        break;
+
+                }
+                alert(str);
+                //document.getElementById("tip").innerHTML="定位失败";
+            }
+            //alert("定位成功！");
+            //console.log("定位成功!");
+            //mouseTool.marker({offset:new AMap.Pixel(-14,-11)});
+        }, false);
+        AMap.event.addDomListener(document.getElementById("delA"),'click',function(){
+            //console.log("删除");
+            $.ajax({
+                url:'http://115.159.45.74/schoolbus/CancelRequest?userid=Ptest4',
+                type:'POST',
+                dataType:'json',
+                success:function(res){
+                    console.log(res);
+                    if(res.msg==="SUCCESS"&&res.code==="0"){
+                        document.getElementById("tip").innerHTML = "删除位置成功";
+                    }
+
+                    //console.log(res);
+                },
+                error:function(err){
+                    console.log("未定位");
+                }
+            })
+            //console.log("删除成功!");
+        });
+        window.pathSimplifierIns = pathSimplifierIns;
+        var myPath = adList,endIdx=0,data=[{
+            name:'校车轨迹',
+             path:myPath.slice(0,1)
+        }];
+        pathSimplifierIns.setData(data);
+        //设置数据
+        /*pathSimplifierIns.setData([{
+            name: '路线0',
+            path: [
+                [112.918059, 27.909898],
+                [112.918600, 27.909585],
+                [112.919500, 27.90876],
+                [112.919915, 27.90749],
+                [112.920700, 27.906598],
+                [112.921106, 27.905783],
+                [112.923402, 27.90529],
+                [112.923982, 27.905081],
+                [112.924057, 27.903507],
+                [112.925000, 27.903157],
+                [112.923900, 27.898975],
+                [112.92248, 27.898966],
+                [112.922700, 27.896937]
+            ]
+        }]);*/
+
+        //对第一条线路（即索引 0）创建一个巡航器
+        var navg1 = pathSimplifierIns.createPathNavigator(0, {
+            loop: false, //循环播放
+            speed: 50000 //巡航速度，单位千米/小时
+        });
+        function expandPath() {
+
+            function doExpand() {
+
+                endIdx++;
+
+                if (endIdx >= myPath.length) {
+                    return false;
+                }
+
+                var cursor = navg1.getCursor().clone(), //保存巡航器的位置
+                    status = navg1.getNaviStatus();
+
+
+                data[0].path = myPath.slice(0, endIdx + 1);
+                pathSimplifierIns.setData(data); //延展路径
+
+
+                //重新建立一个巡航器
+                navg1 = pathSimplifierIns.createPathNavigator(0, {
+                    //loop: true, //循环播放
+                    speed: 600000 //巡航速度，单位千米/小时
+                });
+
+                if (status !== 'stop') {
+                    navg1.start();
+                }
+
+                //恢复巡航器的位置
+                if (cursor.idx >= 0) {
+                    navg1.moveToPoint(cursor.idx, cursor.tail);
+                }
+
+                return true;
+            }
+
+            if (doExpand()) {
+
+                setTimeout(expandPath, 1000);
+            }
+        }
+        navg1.start();
+        expandPath();
+
+    });
+
+</script>
+</body>
+</html>

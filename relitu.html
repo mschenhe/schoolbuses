@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Access-Control-Allow-Origin" content="*">
+    <meta http-equiv="Access-Control-Allow-Origin" content="http://www.1688hot.com">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Content-Type" CONTENT="text/html;charset=utf-8">
+    <meta http-equiv="X-UA-COMPATIBLE" content="IE-edge">
+    <meta http-equiv="X-UA-COMPATIBLE" content="chrome-1">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>Marker example</title>
+    <style type="text/css">
+        body,html,#container{
+            height: 100%;
+            margin: 0px;
+            font:12px Arial;
+        }
+        .taiwan{
+            border: solid 1px red;
+            color: red;
+            float: left;
+            width: 50px;
+            background-color: rgba(255,0,0,0.1)
+        }
+    </style>
+
+</head>
+<body>
+<div id="container" tabindex="0"></div>
+<!--<script src="marker.js"></script>-->
+<script src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+<script src="https://webapi.amap.com/maps?v=1.4.2&key=c6ada8f826dbe41efc3af6526ce861a9"></script>
+<script type="text/javascript">
+    var provinces;
+    $.ajax({
+        url:'http://115.159.45.74/schoolbus/position?way=queryRequests',
+        type:'post',
+        dataType:'json',
+        success:function(data){
+            console.log(data);
+             provinces = data.positionlist;
+            console.log(provinces);
+            console.log(provinces.length);
+            var map = new AMap.Map('container',{
+                resizeEnable: true,
+                zoom:4
+            });
+
+            var markers = []; //province见Demo引用的JS文件
+            for (var i = 0; i < provinces.length; i += 1) {
+                var marker;
+                marker = new AMap.Marker({
+                    position: provinces[i].position.split(','),
+                    //title: provinces[i].name,
+                    map: map
+                });
+                markers.push(marker);
+            }
+            map.setFitView();
+            //alert("123");
+            //console.log(data.positionlist);
+        }
+    });
+
+
+
+</script>
+<script type="text/javascript" src="https://webapi.amap.com/demos/js/liteToolbar.js"></script>
+</body>
+</html>
