@@ -1,72 +1,287 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta http-equiv="Access-Control-Allow-Origin" content="*">
     <meta http-equiv="Access-Control-Allow-Origin" content="http://www.1688hot.com">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta http-equiv="Content-Type" CONTENT="text/html;charset=utf-8">
     <meta http-equiv="X-UA-COMPATIBLE" content="IE-edge">
     <meta http-equiv="X-UA-COMPATIBLE" content="chrome-1">
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
-    <title>Marker example</title>
-    <style type="text/css">
-        body,html,#container{
+    <meta name="viewport" content="initial-scale=1.0,user-scalable=no,width=device-width">
+    <script type="text/javascript" src="http://cache.amap.com/lbs/static/addToolbar.js"></script>
+    <title>校车轨迹展示</title>
+    <style>
+        body,
+        html,
+        #container {
             height: 100%;
-            margin: 0px;
-            font:12px Arial;
+            margin: 0;
         }
-        .taiwan{
-            border: solid 1px red;
-            color: red;
-            float: left;
+        
+        #tip {
             width: 50px;
-            background-color: rgba(255,0,0,0.1)
+            height: 60px;
         }
     </style>
-
 </head>
-<body>
-<div id="container" tabindex="0"></div>
-<!--<script src="marker.js"></script>-->
-<script src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
-<script src="https://webapi.amap.com/maps?v=1.4.2&key=c6ada8f826dbe41efc3af6526ce861a9"></script>
-<script type="text/javascript">
-    var provinces;
-    $.ajax({
-        url:'http://115.159.45.74/schoolbus/position?way=queryRequests',
-        type:'post',
-        dataType:'json',
-        success:function(data){
-            console.log(data);
-             provinces = data.positionlist;
-            console.log(provinces);
-            console.log(provinces.length);
-            var map = new AMap.Map('container',{
-                resizeEnable: true,
-                zoom:4
-            });
 
-            var markers = []; //province见Demo引用的JS文件
-            for (var i = 0; i < provinces.length; i += 1) {
-                var marker;
-                marker = new AMap.Marker({
-                    position: provinces[i].position.split(','),
-                    //title: provinces[i].name,
-                    map: map
-                });
-                markers.push(marker);
-            }
-            map.setFitView();
-            //alert("123");
-            //console.log(data.positionlist);
+<body>
+    <div id='container'></div>
+    <div id="tip"></div>
+    <script src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    <script type="text/javascript" src="http://webapi.amap.com/maps?v=1.4.0&key=c6ada8f826dbe41efc3af6526ce861a9"></script>
+    <script src="http://webapi.amap.com/ui/1.0/main.js?v=1.0.11"></script>
+</body>
+<script type="text/javascript">
+    var timer = null;
+
+    //加载地图，调用浏览器定位服务
+
+    map = new AMap.Map('container', {
+        resizeEnable: true,
+        zoom: 16,
+        center: [112.918821, 27.9041]
+    });
+    AMapUI.load(['ui/misc/PointSimplifier', 'lib/$'], function(PointSimplifier, $) {
+
+        if (!PointSimplifier.supportCanvas) {
+            alert('当前环境不支持 Canvas！');
+            return;
         }
+
+        //window.pointSimplifierIns = pointSimplifierIns;
     });
 
+    //第一次定位
+    map.plugin('AMap.Geolocation', function() {
+
+        geolocation = new AMap.Geolocation({
+            enableHighAccuracy: true,
+            noIpLocate: 0,
+            noGeoLocation: 0,
+            timeout: 10000,
+            maximumAge: 0,
+            convert: false,
+            showButton: false,
+            buttonPosition: 'LB',
+            buttonOffset: new AMap.Pixel(10, 20),
+            showMarker: false,
+            showCircle: false,
+            panToLocation: false,
+            zoomToAccuracy: false,
+            extensions: 'base'
+        });
+        map.addControl(geolocation);
+        geolocation.getCurrentPosition();
+        AMap.event.addListener(geolocation, 'complete', onComplete1); //返回定位信息
+        AMap.event.addListener(geolocation, 'error', onError1); //返回定位出错信息
+    });
+
+    function onComplete1(data) {
+        console.log("hhh");
+        console.log(data);
+
+        document.getElementById("tip").innerHTML = "定位成功";
+        //定位成功之后就上传位置
+        $.ajax({
+            type: 'post',
+            url: 'http://115.159.45.74/schoolbus/position?way=postPosition',
+            dataType: 'json',
+            data: JSON.stringify({
+                formattedAddress: data.formattedAddress,
+                accuracy: data.accuracy,
+                isConverted: data.isConverted,
+                userid: 'C6',
+                position: data.position
+            }),
+            success: function(res) {
+                console.log(res);
+                console.log("第一次");
+                if (res.code === "0") {
+                    var provinces;
+                    $.ajax({
+                        url: 'http://115.159.45.74/schoolbus/position?way=queryRequests',
+                        type: 'post',
+                        dataType: 'json',
+                        success: function(data) {
+                            console.log(data);
+                            //显示热力图
+                            provinces = data.positionlist;
+                            console.log(provinces);
+                            console.log(provinces.length);
 
 
+                            var markers = []; //province见Demo引用的JS文件
+                            for (var i = 0; i < provinces.length; i += 1) {
+                                for (var j = 0; j < provinces[i].position.length; j++) {
+                                    if (provinces[i].position[j] === ",") {
+                                        var lng = provinces[i].position.slice(0, j);
+                                        var lat = provinces[i].position.slice(j + 1, provinces[i].position.length);
+                                        var marker;
+                                        marker = new AMap.Marker({
+                                            position: new AMap.LngLat(lng, lat),
+                                            //title: provinces[i].name,
+                                            //map: map,
+                                            //autoSetFitView: false
+                                        });
+                                        map.add(marker);
+                                    }
+                                }
+
+                                //markers.push(marker);
+                            }
+
+                            //map.setFitView();
+                            //alert("123");
+                            //console.log(data.positionlist);
+                        }
+                    });
+                    console.log("第一次定位成功");
+                }
+
+            }
+        });
+    }
+
+    function onError1(data) {
+        var str = "定位失败";
+        str += '错误信息';
+        switch (data.info) {
+            case 'PERMISSION_DENIED':
+                str += '浏览器阻止了定位操作';
+                break;
+            case 'POSITION_UNAVAILBLE':
+                str += '无法获得当前位置';
+                break;
+            case 'TIMEOUT':
+                str += '定位超时';
+                break;
+            default:
+                str += '未知错误';
+                break;
+
+        }
+        console.log(str);
+        //document.getElementById("tip").innerHTML = ""+arr;
+        //alert(str);
+        //document.getElementById("tip").innerHTML="定位失败";
+    }
+    var timer = null;
+    //之后每隔一段时间定位一次
+    setInterval(function() {
+        map.plugin('AMap.Geolocation', function() {
+
+            geolocation = new AMap.Geolocation({
+                enableHighAccuracy: true,
+                noIpLocate: 0,
+                noGeoLocation: 0,
+                timeout: 10000,
+                maximumAge: 0,
+                convert: false,
+                showButton: false,
+                buttonPosition: 'LB',
+                buttonOffset: new AMap.Pixel(10, 20),
+                showMarker: false,
+                showCircle: false,
+                panToLocation: false,
+                zoomToAccuracy: false,
+                extensions: 'base'
+            });
+            map.addControl(geolocation);
+            geolocation.getCurrentPosition();
+            AMap.event.addListener(geolocation, 'complete', onComplete); //返回定位信息
+            AMap.event.addListener(geolocation, 'error', onError); //返回定位出错信息
+        })
+    }, 30000);
+
+    //解析定位结果
+    function onComplete(dataon) {
+        console.log(dataon);
+        clearInterval(timer);
+        //定位成功后上传校车位置
+        timer = setInterval($.ajax({
+            type: 'post',
+            url: 'http://115.159.45.74/schoolbus/position?way=postPosition',
+            dataType: 'json',
+            data: JSON.stringify({
+                formattedAddress: data.formattedAddress,
+                accuracy: data.accuracy,
+                isConverted: data.isConverted,
+                userid: 'C6',
+                position: data.position
+            }),
+            success: function(res) {
+                console.log(res);
+                if (res.code === "0") {
+                    document.getElementById("tip").innerHTML = "定位成功";
+                    //上传位置成功之后就获取一次热力图
+                    var provinces;
+                    $.ajax({
+                        url: 'http://115.159.45.74/schoolbus/position?way=queryRequests',
+                        type: 'post',
+                        dataType: 'json',
+                        success: function(data) {
+                            console.log(data);
+
+                            provinces = data.positionlist;
+                            console.log(provinces);
+                            console.log(provinces.length);
+                            var markers = []; //province见Demo引用的JS文件
+                            for (var i = 0; i < provinces.length; i += 1) {
+                                for (var j = 0; j < provinces[i].position.length; j++) {
+                                    if (provinces[i].position[j] === ",") {
+                                        var lng = provinces[i].position.slice(0, j);
+                                        var lat = provinces[i].position.slice(j + 1, provinces[i].position.length);
+                                        var marker;
+                                        marker = new AMap.Marker({
+                                            position: new AMap.LngLat(lng, lat),
+                                            //title: provinces[i].name,
+                                            //map: map,
+                                            //autoSetFitView: false
+                                        });
+                                        map.add(marker);
+                                    }
+                                }
+
+                                //markers.push(marker);
+                            }
+                        }
+                    });
+                    console.log("成功");
+                }
+
+            }
+
+        }), 29990);
+
+    }
+
+    clearTimeout(timer);
+
+    //解析定位错误信息
+    function onError(data) {
+        var str = "定位失败";
+        str += '错误信息';
+        switch (data.info) {
+            case 'PERMISSION_DENIED':
+                str += '浏览器阻止了定位操作';
+                break;
+            case 'POSITION_UNAVAILBLE':
+                str += '无法获得当前位置';
+                break;
+            case 'TIMEOUT':
+                str += '定位超时';
+                break;
+            default:
+                str += '未知错误';
+                break;
+
+        }
+        document.getElementById("tip").innerHTML = "" + str;
+        //document.getElementById("tip").innerHTML="定位失败";
+    }
 </script>
-<script type="text/javascript" src="https://webapi.amap.com/demos/js/liteToolbar.js"></script>
-</body>
+
 </html>
